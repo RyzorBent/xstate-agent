@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@ai-sdk/google": "^1.1.25",
+    "@ai-sdk/openai": "^1.2.5",
     "@statelyai/agent": "^1.1.6",
     "xstate": "^5.19.2",
     "zod": "^3.24.2"

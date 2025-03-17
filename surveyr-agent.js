@@ -29,6 +29,24 @@ const agent = createAgent({
   },
 });
 
+const energyAgent = createAgent({
+  name: 'energy_level_agent',
+  description:
+    'An agent that rates the energy level of user messages and provides appropriate responses',
+  model: google('gemini-2.0-flash-001'),
+  events: {
+    lowEnergy: z.object({
+      message: z.string().describe('Response for low energy level (0-3)'),
+    }),
+    mediumEnergy: z.object({
+      message: z.string().describe('Response for medium energy level (4-7)'),
+    }),
+    highEnergy: z.object({
+      message: z.string().describe('Response for high energy level (8-10)'),
+    }),
+  },
+});
+
 // Add system message to set the agent's behavior
 agent.addMessage({
   role: 'system',
@@ -46,12 +64,24 @@ If a user introduces topics irrelevant to market research and AI's impact, such 
 Your responses should be polite, professional, and helpful, even when redirecting. The goal is to complete the research interview effectively while being respectful to the interviewee.`,
 });
 
+energyAgent.addMessage({
+  role: 'system',
+  content: `You are an energy level assessment agent. Your job is to:
+1. Analyze messages for excitement and enthusiasm
+2. Look for exclamation marks, positive words, expressions of interest
+3. Consider the context and potential for excitement in the topic
+4. Rate the energy on a scale of 0-10
+5. Respond with appropriate energy-level events based on the score range`,
+});
+
 const machine = setup({
   actors: {
     fromTerminal: fromTerminal,
     fromDecision: fromDecision(agent),
+    fromEnergyDecision: fromDecision(energyAgent),
   },
 }).createMachine({
+  id: 'survey',
   context: {
     questions: [
       '*[1 of 3]* What interests you most about the BMW iX electric SUV?',
@@ -62,10 +92,12 @@ const machine = setup({
     answers: [],
     probingCount: 0,
     conversationHistory: [],
+    lastUserMessage: '',
   },
   initial: 'engagement',
   states: {
     engagement: {
+      id: 'engagement',
       initial: 'asking',
       states: {
         asking: {
@@ -131,25 +163,61 @@ const machine = setup({
           },
         },
         listening: {
-          invoke: {
-            src: 'fromTerminal',
-            input: 'You: ',
-            onDone: {
-              actions: [
-                assign({
-                  answers: ({ context, event }) =>
-                    context.probingCount === 0
-                      ? [...context.answers, event.output]
-                      : context.answers,
-                  conversationHistory: ({ context, event }) => [
-                    ...context.conversationHistory,
-                    `User: ${event.output}`,
+          initial: 'getUserInput',
+          states: {
+            getUserInput: {
+              invoke: {
+                src: 'fromTerminal',
+                input: 'You: ',
+                onDone: {
+                  actions: [
+                    assign({
+                      answers: ({ context, event }) =>
+                        context.probingCount === 0
+                          ? [...context.answers, event.output]
+                          : context.answers,
+                      conversationHistory: ({ context, event }) => [
+                        ...context.conversationHistory,
+                        `User: ${event.output}`,
+                      ],
+                      lastUserMessage: ({ event }) => event.output || '',
+                      probingCount: ({ context }) => context.probingCount + 1,
+                    }),
                   ],
-                  probingCount: ({ context }) => context.probingCount + 1,
-                }),
-              ],
-              target: 'analyzing',
+                  target: 'rateEnergy',
+                },
+              },
             },
+            rateEnergy: {
+              invoke: {
+                src: 'fromEnergyDecision',
+                input: ({ context }) => ({
+                  agent: energyAgent,
+                  context,
+                  goal: `Rate the energy level of this message: "${context.lastUserMessage}" on a scale of 0-10, considering enthusiasm, excitement, and engagement. Respond with the appropriate energy level event.`,
+                }),
+              },
+              on: {
+                lowEnergy: {
+                  actions: [({ event }) => console.log('\nEnergy Level: So so energy')],
+                  target: 'done',
+                },
+                mediumEnergy: {
+                  actions: [({ event }) => console.log('\nEnergy Level: Cool energy')],
+                  target: 'done',
+                },
+                highEnergy: {
+                  actions: [({ event }) => console.log('\nEnergy Level: Super energy')],
+                  target: 'done',
+                },
+              },
+            },
+            done: {
+              type: 'final',
+            },
+          },
+          onDone: {
+            target: 'analyzing',
           },
         },
         analyzing: {
@@ -209,53 +277,53 @@ const machine = setup({
 
 const actor = createActor(machine).start();
 
-if(LOGGING)
-actor.subscribe((snapshot) => {
-  console.log(
-    '\n\n----------------------------- current state context -----------------------------'
-  );
-  console.log({
-    status: snapshot.status,
-    value: snapshot.value,
-    probingCount: snapshot.context.probingCount,
+if (LOGGING)
+  actor.subscribe((snapshot) => {
+    console.log(
+      '\n\n----------------------------- current state context -----------------------------'
+    );
+    console.log({
+      status: snapshot.status,
+      value: snapshot.value,
+      probingCount: snapshot.context.probingCount,
+    });
+    console.log(
+      '---------------------------------------------------------------------------------\n\n'
+    );
   });
-  console.log(
-    '---------------------------------------------------------------------------------\n\n'
-  );
-});
-if(LOGGING)
-agent.subscribe((state) => {
-  if(VERBOSE)
-  console.log({ agentMessages: agent.getMessages() });
-  if (state.context.plans.length > 0) {
-    const decision = state.context.plans[state.context.plans.length - 1];
-    if (decision) {
-      // Store previous decision in closure to compare
-      const prevDecision = (() => {
-        let prev = null;
-        return (current) => {
-          const changed = !prev || 
-            prev.state?.value !== current.state?.value ||
-            prev.nextEvent !== current.nextEvent ||
-            prev.goal !== current.goal;
-          prev = current;
-          return changed;
-        };
-      })();
+if (LOGGING)
+  agent.subscribe((state) => {
+    if (VERBOSE) console.log({ agentMessages: agent.getMessages() });
+    if (state.context.plans.length > 0) {
+      const decision = state.context.plans[state.context.plans.length - 1];
+      if (decision) {
+        // Store previous decision in closure to compare
+        const prevDecision = (() => {
+          let prev = null;
+          return (current) => {
+            const changed =
+              !prev ||
+              prev.state?.value !== current.state?.value ||
+              prev.nextEvent !== current.nextEvent ||
+              prev.goal !== current.goal;
+            prev = current;
+            return changed;
+          };
+        })();
 
-      if (prevDecision(decision)) {
-        console.log(
-          '\n\n----------------------------- agent decisions -----------------------------'
-        );
-        console.log('Latest decision:', {
-          value: decision.state?.value,
-          nextEvent: decision.nextEvent,
-          goal: decision.goal,
-        });
-        console.log(
-          '----------------------------------------------------------------------------\n\n'
-        );
+        if (prevDecision(decision)) {
+          console.log(
+            '\n\n----------------------------- agent decisions -----------------------------'
+          );
+          console.log('Latest decision:', {
+            value: decision.state?.value,
+            nextEvent: decision.nextEvent,
+            goal: decision.goal,
+          });
+          console.log(
+            '----------------------------------------------------------------------------\n\n'
+          );
+        }
       }
     }
-  }
-});
+  });

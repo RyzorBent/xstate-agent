@@ -7,28 +7,43 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+const VERBOSE = false;
+const LOGGING = false;
+
 const agent = createAgent({
-  id: 'emotional_probe',
+  name: 'market_research_agent',
+  description:
+    'A research assistant chatbot conducting in-depth interviews on the impact of AI on market research methodologies.',
   model: google('gemini-2.0-flash-001'),
   events: {
     askQuestion: z.object({
       question: z.string().describe('Exact question from the questionnaire'),
     }),
     probeResponse: z.object({
-      followUp: z.string().describe('Empathetic follow-up question to explore emotional context'),
+      followUp: z.string().describe('Follow-up question to explore context'),
     }),
     transitionMessage: z.object({
       message: z.string().describe('Transition message to next question'),
     }),
     complete: z.object({}).describe('End the questionnaire'),
   },
-  context: {
-    questions: z.array(z.string()),
-    currentQuestionIndex: z.number(),
-    answers: z.array(z.string()),
-    probingCount: z.number(),
-    conversationHistory: z.array(z.string()),
-  },
+});
+
+// Add system message to set the agent's behavior
+agent.addMessage({
+  role: 'system',
+  content: `You are a helpful research assistant chatbot. Your primary mission is to conduct in-depth research interviews on the impact of AI on market research methodologies.
+
+Maintain focus on questions related to AI tools, research processes, market research, future of research, and researcher roles.
+
+If a user introduces topics irrelevant to market research and AI's impact, such as unrelated news, personal opinions on unrelated subjects, or attempts to change the subject drastically, you should:
+
+1. Acknowledge: Briefly acknowledge their input with phrases like "That's interesting," "I understand," or simply by reflecting back a short part of their statement.
+2. Remind: Politely remind them of the interview's focus with phrases like "For our research today, we're focusing on...", "To keep our interview on track...", "As part of this research interview...", or "Let's get back to our discussion about...".
+3. Redirect: Gently redirect the conversation back to the research questions or the next question in the interview flow. Use phrases like "Could we now discuss...", "Moving on to the next question...", "Let's delve deeper into...", or simply re-ask the last unanswered research question or introduce the next one.
+4. [Optional - if appropriate]: If the off-topic item is somewhat related, you could say something like "While that's related to broader tech discussions, for this interview, let's keep our focus specifically on AI in market research."
+
+Your responses should be polite, professional, and helpful, even when redirecting. The goal is to complete the research interview effectively while being respectful to the interviewee.`,
 });
 
 const machine = setup({
@@ -63,19 +78,16 @@ const machine = setup({
                 context.probingCount === 0
                   ? `Ask this exact question: "${context.questions[context.currentQuestionIndex]}"`
                   : context.probingCount < 3
-                  ? `Analyze this response for emotional context: "${
+                  ? `Based on the user's response: "${
                       context.conversationHistory.slice(-1)[0]
-                    }". Create an empathetic follow-up question that explores deeper feelings and motivations. Focus on emotional aspects like desires, concerns, or personal values.`
+                    }", create a follow-up question that explores their perspective deeper, focusing on specific examples, challenges, or opportunities they see in AI's impact on market research.`
                   : `Based on the conversation history: "${context.conversationHistory.join(
                       '\n'
-                    )}", create a very brief transition message that: 1) Acknowledges the key themes from our discussion so far 2) Naturally leads into the topic of ${context.questions[
+                    )}", create a brief transition that acknowledges the key points discussed and naturally leads into the next topic about ${context.questions[
                       context.currentQuestionIndex + 1
                     ]
                       .toLowerCase()
-                      .replace(
-                        '*question_' + (context.currentQuestionIndex + 2) + '*',
-                        ''
-                      )} without actually asking the question`,
+                      .replace(/^\*\[\d of \d\]\*\s*/, '')} without asking the question directly.`,
             }),
           },
           on: {
@@ -197,27 +209,53 @@ const machine = setup({
 
 const actor = createActor(machine).start();
 
+if(LOGGING)
 actor.subscribe((snapshot) => {
   console.log(
     '\n\n----------------------------- current state context -----------------------------'
   );
-  console.log({ status: snapshot.status, value: snapshot.value, probingCount: snapshot.context.probingCount });
+  console.log({
+    status: snapshot.status,
+    value: snapshot.value,
+    probingCount: snapshot.context.probingCount,
+  });
   console.log(
     '---------------------------------------------------------------------------------\n\n'
   );
 });
-
+if(LOGGING)
 agent.subscribe((state) => {
-    if (state.context.plans.length > 0) {
-        const decision = state.context.plans[state.context.plans.length - 1];
-        if (decision) {
-              console.log('\n\n----------------------------- agent decisions -----------------------------');
-              console.log('Latest decision:', {
-                value: decision.state?.value,
-                nextEvent: decision.nextEvent,
-                goal: decision.goal,
-              });
-              console.log('----------------------------------------------------------------------------\n\n');
-        }
+  if(VERBOSE)
+  console.log({ agentMessages: agent.getMessages() });
+  if (state.context.plans.length > 0) {
+    const decision = state.context.plans[state.context.plans.length - 1];
+    if (decision) {
+      // Store previous decision in closure to compare
+      const prevDecision = (() => {
+        let prev = null;
+        return (current) => {
+          const changed = !prev || 
+            prev.state?.value !== current.state?.value ||
+            prev.nextEvent !== current.nextEvent ||
+            prev.goal !== current.goal;
+          prev = current;
+          return changed;
+        };
+      })();
+
+      if (prevDecision(decision)) {
+        console.log(
+          '\n\n----------------------------- agent decisions -----------------------------'
+        );
+        console.log('Latest decision:', {
+          value: decision.state?.value,
+          nextEvent: decision.nextEvent,
+          goal: decision.goal,
+        });
+        console.log(
+          '----------------------------------------------------------------------------\n\n'
+        );
+      }
     }
-})
+  }
+});

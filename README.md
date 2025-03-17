@@ -1,15 +1,15 @@
-# XState Emotional Survey Agent
+# XState AI Market Research Agent
 
-A conversational AI agent built with XState and Google's Gemini model that conducts emotionally intelligent surveys about BMW iX electric SUV preferences.
+A conversational AI agent built with XState and Google's Gemini model that conducts intelligent research interviews about the impact of AI on market research methodologies.
 
 ## Overview
 
-This project demonstrates the use of state machines to create an intelligent survey agent that:
+This project demonstrates the use of state machines to create an intelligent research agent that:
 
-- Asks predefined questions about BMW iX preferences
-- Probes deeper with empathetic follow-up questions
-- Analyzes emotional context in responses
-- Provides smooth transitions between questions
+- Conducts structured research interviews on any topic
+- Maintains focus through gentle redirection
+- Probes deeper with contextual follow-up questions
+- Provides smooth transitions between topics
 - Generates insights from the conversation
 
 ## Prerequisites
@@ -40,7 +40,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
 
 ## Usage
 
-Run the survey agent:
+Run the research agent:
 
 ```bash
 node surveyr-agent
@@ -48,25 +48,27 @@ node surveyr-agent
 
 The agent will:
 
-1. Ask a series of questions about the BMW iX
-2. Generate empathetic follow-up questions based on your responses
-3. Provide smooth transitions between topics
-4. Display emotional insights at the end of the survey
+1. Ask a series of questions about AI's impact on market research
+2. Generate relevant follow-up questions based on your responses
+3. Keep the conversation focused on the research topic
+4. Provide smooth transitions between questions
+5. Display research insights at the end of the interview
 
-## Survey Flow
+## Interview Flow
 
-The agent conducts a 3-question survey about:
+The agent conducts a 3-question interview about:
 
-1. Interest in the BMW iX electric SUV
-2. Importance of sustainability in car buying decisions
-3. Expected features in a luxury electric SUV
+1. How AI tools are transforming traditional market research methodologies
+2. Challenges in integrating AI into existing research processes
+3. Evolution of market researcher roles with AI adoption
 
 For each question, the agent:
 
-- Asks the main question
+- Asks the main research question
 - Probes deeper with up to 3 follow-up questions
-- Provides a transition to the next topic
-- Captures emotional context and motivations
+- Maintains focus on AI and market research topics
+- Provides smooth transitions between topics
+- Captures key insights and context
 
 ## Technologies Used
 

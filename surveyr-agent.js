@@ -207,19 +207,17 @@ actor.subscribe((snapshot) => {
   );
 });
 
-// agent.subscribe((state) => {
-//     if (state.context.plans.length > 0) {
-//         const decision = state.context.plans[state.context.plans.length - 1];
-//         if (decision) {
-//               console.log('\n\n----------------------------- agent decisions -----------------------------');
-//               console.log('Latest decision:', {
-//                 value: decision.state?.value,
-//                 nextEvent: decision.nextEvent,
-//                 goal: decision.goal,
-//               });
-//               console.log('----------------------------------------------------------------------------\n\n');
-//         }
-//     }
-// })
-
-console.log('agentPlan: ', agent.getPlans());
+agent.subscribe((state) => {
+    if (state.context.plans.length > 0) {
+        const decision = state.context.plans[state.context.plans.length - 1];
+        if (decision) {
+              console.log('\n\n----------------------------- agent decisions -----------------------------');
+              console.log('Latest decision:', {
+                value: decision.state?.value,
+                nextEvent: decision.nextEvent,
+                goal: decision.goal,
+              });
+              console.log('----------------------------------------------------------------------------\n\n');
+        }
+    }
+})
